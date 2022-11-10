@@ -18,6 +18,9 @@ class FakeTensorProp(torch.fx.Interpreter):
     Args:
          module (GraphModule): The module to be executed
     """
+    def __init__(self, module: torch.fx.GraphModule, fake_tensor_mode):
+        super().__init__(module)
+        self.mode = fake_tensor_mode
 
     def run_node(self, n: Node):
         result = super().run_node(n)
@@ -25,6 +28,6 @@ class FakeTensorProp(torch.fx.Interpreter):
         return result
 
     def propagate(self, *args):
-        with FakeTensorMode.push() as mode:
-            fake_args = [mode.from_tensor(a) for a in args]
+        with self.mode:
+            fake_args = [self.mode.from_tensor(a) for a in args]
             return super().run(*fake_args)
