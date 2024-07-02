@@ -1,3 +1,4 @@
+# mypy: allow-untyped-defs
 """Provide an API for writing protocol buffers to event files to be consumed by TensorBoard for visualization."""
 
 import os
@@ -846,7 +847,7 @@ class SummaryWriter:
         retval = rawstr
         retval = retval.replace("%", f"%{ord('%'):02x}")
         retval = retval.replace("/", f"%{ord('/'):02x}")
-        retval = retval.replace("\\", "%%%02x" % (ord("\\")))
+        retval = retval.replace("\\", "%%%02x" % (ord("\\")))  # noqa: UP031
         return retval
 
     def add_embedding(
@@ -916,7 +917,7 @@ class SummaryWriter:
                     "warning: Embedding dir exists, did you set global_step for add_embedding()?"
                 )
             else:
-                raise FileExistsError(
+                raise NotADirectoryError(
                     f"Path: `{save_path}` exists, but is a file. Cannot proceed."
                 )
         else:
