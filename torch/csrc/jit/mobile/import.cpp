@@ -5,7 +5,6 @@
 #include <ATen/core/ivalue.h>
 #include <ATen/core/qualified_name.h>
 #include <c10/util/Exception.h>
-#include <c10/util/Optional.h>
 #include <c10/util/ScopeExit.h>
 #include <c10/util/irange.h>
 #include <caffe2/serialize/in_memory_adapter.h>
@@ -23,6 +22,7 @@
 #include <torch/csrc/jit/serialization/import_export_functions.h>
 #include <torch/csrc/jit/serialization/import_read.h>
 #include <torch/custom_class.h>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -81,8 +81,7 @@
 //  - Argument::{known_length_,kwarg_only_}
 //  - FunctionSchema::{overload_name_, is_vararg_, is_varret_}
 
-namespace torch {
-namespace jit {
+namespace torch::jit {
 using caffe2::serialize::MemoryReadAdapter;
 using caffe2::serialize::PyTorchStreamReader;
 using caffe2::serialize::ReadAdapterInterface;
@@ -91,7 +90,7 @@ OpCode parseOpCode(const char* str);
 
 TypePtr resolveTypeNameMobile(
     const c10::QualifiedName& qn,
-    std::shared_ptr<CompilationUnit> compilation_unit) {
+    const std::shared_ptr<CompilationUnit>& compilation_unit) {
   // HACK: first we check whether the name starts with special prefix to
   // tell if it's a supported pytorch class type. There are two special
   // prefixes. "__torch__" for nn module, and "torch.jit" from to_backend.
@@ -146,7 +145,7 @@ c10::intrusive_ptr<c10::ivalue::Object> objLoaderMobile(
     custom_class_type->getMethod("__setstate__").run(stack);
     return obj;
   } else {
-    auto dict = std::move(input).toGenericDict();
+    auto dict = input.toGenericDict();
     size_t ndict = dict.size();
     auto obj = c10::ivalue::Object::create(type, ndict);
     auto it = dict.begin();
@@ -223,8 +222,8 @@ class BytecodeDeserializer final {
   // dynamically. It's used for finding the minimum required runtime to run all
   // operators from the given model. If it's less than the current runtime,
   // upgrader will be applied at loading stage.
-  uint64_t operator_version_;
-  uint64_t bytecode_version_;
+  uint64_t operator_version_{0};
+  uint64_t bytecode_version_{0};
 };
 
 BytecodeDeserializer::BytecodeDeserializer(
@@ -267,7 +266,7 @@ void BytecodeDeserializer::parseFunctionSchema(
         args.emplace_back(
             name,
             std::move(type),
-            c10::nullopt /*N*/,
+            std::nullopt /*N*/,
             std::move(default_value));
       }
       tryRegisterMethod(args, *function);
@@ -486,8 +485,7 @@ c10::IValue BytecodeDeserializer::readArchive(
   };
 
   bool bytecode_tensor_in_constants_archive =
-      (archive_name == "bytecode" &&
-       !isTensorInBytecodeArchive(*reader_.get()));
+      (archive_name == "bytecode" && !isTensorInBytecodeArchive(*reader_));
 
   auto ivalues = torch::jit::readArchiveAndTensors(
       archive_name,
@@ -497,7 +495,7 @@ c10::IValue BytecodeDeserializer::readArchive(
       type_resolver,
       obj_loader,
       device_,
-      *reader_.get(),
+      *reader_,
       nullptr);
   return ivalues;
 }
@@ -704,7 +702,7 @@ void _load_extra_only_for_mobile(
       // TODO: the current flatbuffers implementation will always load the
       // whole module including the extra files. Ideally it should be
       // possible to just get the extra files given data
-      load_mobile_module_from_file(filename, c10::nullopt, &extra_files);
+      load_mobile_module_from_file(filename, std::nullopt, &extra_files);
       break;
     }
     default: {
@@ -734,5 +732,4 @@ std::set<std::string> _export_operator_list(
 }
 
 } // namespace mobile
-} // namespace jit
-} // namespace torch
+} // namespace torch::jit
